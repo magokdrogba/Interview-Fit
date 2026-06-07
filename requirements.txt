@@ -31,7 +31,10 @@ av==16.1.0
 sounddevice==0.5.5
 soundfile==0.13.1
 librosa==0.11.0
-webrtcvad==2.0.10
+# Pre-built wheels of webrtcvad — installs without a C compiler and supports
+# more Python versions (incl. Python 3.14 on Streamlit Cloud). Imports as the
+# same `webrtcvad` module. The app also degrades gracefully if it's missing.
+webrtcvad-wheels
 
 # --- Tests ---
 pytest==9.0.3

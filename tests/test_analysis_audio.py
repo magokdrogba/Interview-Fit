@@ -26,6 +26,25 @@ def _silence(seconds: float, sr: int = 16_000) -> np.ndarray:
     return np.zeros(int(sr * seconds), dtype="float32")
 
 
+def test_graceful_fallback_when_webrtcvad_unavailable(tmp_path, monkeypatch):
+    """On platforms without webrtcvad (e.g. Python 3.14 on Streamlit Cloud),
+    analyze_audio must not crash: it returns safe-default speech metrics and
+    still computes voice metrics."""
+    monkeypatch.setattr(A, "WEBRTCVAD_AVAILABLE", False)
+    p = tmp_path / "tone.wav"
+    _write_wav(p, _tone(1.5, freq=180.0))
+
+    out = A.analyze_audio(p)
+    assert out["status"] == "ok"
+    assert out["speech"]["status"] == "unavailable"
+    # Safe defaults — never crash downstream consumers.
+    assert out["speech"]["pause_count_3s"] == 0
+    assert out["speech"]["hesitation_before_speech_s"] == 0.0
+    assert out["speech"]["speech_ratio"] is None
+    # Voice (tremor) analysis does not depend on webrtcvad.
+    assert out["voice"]["status"] in ("ok", "insufficient-voiced")
+
+
 # ---------------------------------------------------------------------------
 # Boundary cases
 # ---------------------------------------------------------------------------

@@ -30,11 +30,26 @@ from typing import Any
 import librosa
 import numpy as np
 import soundfile as sf
-import webrtcvad
 
 from config import AUDIO_SAMPLE_RATE, LONG_PAUSE_SECONDS, VAD_AGGRESSIVENESS
 
 logger = logging.getLogger(__name__)
+
+# webrtcvad has no wheels for some newer Python versions (e.g. Python 3.14 on
+# Streamlit Cloud) and needs a C compiler to build from source. Import it
+# defensively so a missing/incompatible build degrades gracefully instead of
+# crashing the whole app at import time. See requirements.txt (webrtcvad-wheels).
+try:
+    import webrtcvad
+
+    WEBRTCVAD_AVAILABLE = True
+except Exception:  # noqa: BLE001 - ImportError or any load/ABI failure
+    webrtcvad = None  # type: ignore[assignment]
+    WEBRTCVAD_AVAILABLE = False
+    logger.warning(
+        "webrtcvad is unavailable; speech/silence segmentation will be skipped "
+        "and the related metrics will report as unmeasured."
+    )
 
 # webrtcvad supports 8/16/32/48 kHz only. We resample everything to this.
 _VAD_SAMPLE_RATES: tuple[int, ...] = (8_000, 16_000, 32_000, 48_000)
@@ -141,12 +156,16 @@ def analyze_audio(
     notes: list[str] = []
 
     # --- Speech segmentation -------------------------------------------------
-    try:
-        seg = _vad_segments(y, sr, aggressiveness=vad_aggressiveness)
-        out["speech"] = _summarize_segments(seg, duration_s)
-    except Exception as exc:  # noqa: BLE001
-        notes.append(f"vad failed: {exc}")
-        out["speech"] = {"status": "error"}
+    if not WEBRTCVAD_AVAILABLE:
+        out["speech"] = _unavailable_speech()
+        notes.append("webrtcvad unavailable; speech segmentation skipped")
+    else:
+        try:
+            seg = _vad_segments(y, sr, aggressiveness=vad_aggressiveness)
+            out["speech"] = _summarize_segments(seg, duration_s)
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"vad failed: {exc}")
+            out["speech"] = {"status": "error"}
 
     # --- Speech rate ---------------------------------------------------------
     if syllable_count is not None and out["speech"].get("status") == "ok":
@@ -216,8 +235,8 @@ def _vad_segments(y: np.ndarray, sr: int, *, aggressiveness: int) -> list[_Segme
         chunk = raw[off : off + frame_bytes]
         try:
             is_sp = vad.is_speech(chunk, vad_sr)
-        except webrtcvad.Error:
-            is_sp = False  # treat malformed frame as silence
+        except Exception:  # noqa: BLE001 - malformed frame → treat as silence
+            is_sp = False
 
         if cur_is_speech is None:
             cur_is_speech = is_sp
@@ -231,6 +250,24 @@ def _vad_segments(y: np.ndarray, sr: int, *, aggressiveness: int) -> list[_Segme
     if cur_is_speech is not None and t > cur_start:
         segments.append(_Segment(cur_start, t, cur_is_speech))
     return segments
+
+
+def _unavailable_speech() -> dict[str, Any]:
+    """Safe-default speech block when webrtcvad isn't installed.
+
+    Counts default to 0 / 0.0 so downstream code never crashes. ``speech_ratio``
+    is left None (rather than 0.0) so the UI shows "측정 불가" instead of a
+    misleading "답변량 부족" when we genuinely could not measure it.
+    """
+    return {
+        "status": "unavailable",
+        "total_speech_s": 0.0,
+        "total_silence_s": 0.0,
+        "speech_ratio": None,
+        "pause_count_3s": 0,
+        "longest_pause_s": 0.0,
+        "hesitation_before_speech_s": 0.0,
+    }
 
 
 def _summarize_segments(segments: list[_Segment], duration_s: float) -> dict[str, Any]:

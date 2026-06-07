@@ -1,0 +1,37 @@
+# Direct dependencies, pinned to the versions resolved during Phase 0 setup.
+# For a fully reproducible install of every transitive dep, use requirements.lock.txt.
+
+# --- Core / UI ---
+streamlit==1.58.0
+python-dotenv==1.2.2
+
+# --- Resume parsing ---
+pdfplumber==0.11.9
+
+# --- Crawling ---
+requests==2.34.2
+beautifulsoup4==4.14.3
+playwright==1.60.0
+
+# --- LLM / STT ---
+openai==2.38.0
+
+# --- Camera / vision ---
+opencv-python==4.13.0.92
+mediapipe==0.10.35
+
+# --- Web (Streamlit Cloud) camera+mic recording ---
+# Enables true in-browser video+audio capture for the cloud deployment.
+# Pulls aiortc + PyAV (av). Optional for local use (OpenCV window flow).
+streamlit-webrtc==0.72.1
+aiortc==1.14.0
+av==16.1.0
+
+# --- Audio capture + analysis ---
+sounddevice==0.5.5
+soundfile==0.13.1
+librosa==0.11.0
+webrtcvad==2.0.10
+
+# --- Tests ---
+pytest==9.0.3

@@ -29,13 +29,23 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Sequence
 
-import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from config import PROJECT_ROOT
 
 logger = logging.getLogger(__name__)
+
+# Import OpenCV defensively (Streamlit Cloud uses opencv-python-headless, but
+# guard against any missing build). This module only runs in the local OpenCV
+# HUD path; if cv2 is absent, rendering becomes a no-op that returns the frame.
+try:
+    import cv2
+
+    CV2_AVAILABLE = True
+except ImportError:
+    cv2 = None  # type: ignore[assignment]
+    CV2_AVAILABLE = False
 
 # A single (text, top_left_xy, font_size_px, bgr_color) draw request.
 TextItem = tuple[str, tuple[int, int], int, tuple[int, int, int]]
@@ -100,7 +110,7 @@ def render_korean_texts(frame: np.ndarray, items: Sequence[TextItem]) -> np.ndar
     Colors are given in **BGR** to match the rest of the OpenCV code. The
     frame is modified in place and also returned.
     """
-    if frame is None or frame.size == 0 or not items:
+    if not CV2_AVAILABLE or frame is None or frame.size == 0 or not items:
         return frame
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

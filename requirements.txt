@@ -17,7 +17,9 @@ playwright==1.60.0
 openai==2.38.0
 
 # --- Camera / vision ---
-opencv-python==4.13.0.92
+# Headless OpenCV: no libGL/display dependency, so it installs and imports on
+# Streamlit Cloud. Provides the same `cv2` module as opencv-python.
+opencv-python-headless==4.13.0.92
 mediapipe==0.10.35
 
 # --- Web (Streamlit Cloud) camera+mic recording ---

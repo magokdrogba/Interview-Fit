@@ -106,6 +106,18 @@ def test_no_model_returns_no_model(tmp_path, monkeypatch):
     assert out["duration_s"] > 0
 
 
+def test_graceful_fallback_when_cv2_unavailable(monkeypatch):
+    """On platforms without OpenCV (opencv-python needs libGL, absent on
+    Streamlit Cloud) analyze_video must not crash: it returns safe-default
+    no-data metrics."""
+    monkeypatch.setattr(V, "CV2_AVAILABLE", False)
+    out = V.analyze_video("anything.mp4")
+    assert out["status"] == "no-cv2"
+    assert out["gaze"]["status"] == "no-data"
+    assert out["expression"]["status"] == "no-data"
+    assert out["head"]["status"] == "no-data"
+
+
 def test_no_face_detected_marks_no_face(tmp_path):
     p = tmp_path / "tiny.mp4"
     _write_mp4(p, n_frames=20, fps=10)

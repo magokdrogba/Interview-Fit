@@ -23,7 +23,6 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-import cv2
 import mediapipe as mp
 import numpy as np
 from mediapipe.tasks import python as mp_python
@@ -32,6 +31,18 @@ from mediapipe.tasks.python import vision as mp_vision
 from config import FACE_LANDMARKER_PATH, FACE_LANDMARKER_URL
 
 logger = logging.getLogger(__name__)
+
+# opencv-python needs libGL (a display) which Streamlit Cloud lacks. We install
+# opencv-python-headless there, but import defensively so a missing build
+# degrades to a no-op overlay instead of crashing at import time.
+try:
+    import cv2
+
+    CV2_AVAILABLE = True
+except ImportError:
+    cv2 = None  # type: ignore[assignment]
+    CV2_AVAILABLE = False
+    logger.warning("cv2 (OpenCV) is unavailable; the face-landmark overlay is disabled.")
 
 # Dot color (BGR) and radius. Subtle so they don't obscure the user's face.
 _DOT_COLOR: tuple[int, int, int] = (0, 255, 0)
@@ -118,7 +129,12 @@ class FaceLandmarkOverlay:
 
         If the model is not loaded, returns the frame unchanged.
         """
-        if self._landmarker is None or bgr_frame is None or bgr_frame.size == 0:
+        if (
+            not CV2_AVAILABLE
+            or self._landmarker is None
+            or bgr_frame is None
+            or bgr_frame.size == 0
+        ):
             return bgr_frame
 
         h, w = bgr_frame.shape[:2]

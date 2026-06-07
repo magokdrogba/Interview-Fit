@@ -28,7 +28,6 @@ import math
 from pathlib import Path
 from typing import Any
 
-import cv2
 import mediapipe as mp
 import numpy as np
 from mediapipe.tasks import python as mp_python
@@ -38,6 +37,22 @@ from config import ANALYSIS_SAMPLE_FPS, FACE_LANDMARKER_PATH
 from src.interview.overlay import ensure_face_landmarker_model
 
 logger = logging.getLogger(__name__)
+
+# opencv-python needs libGL (a display) which Streamlit Cloud lacks. We install
+# opencv-python-headless there (same `cv2` module, no display dep), but still
+# import defensively so a missing build degrades gracefully instead of crashing
+# the whole app at import time.
+try:
+    import cv2
+
+    CV2_AVAILABLE = True
+except ImportError:
+    cv2 = None  # type: ignore[assignment]
+    CV2_AVAILABLE = False
+    logger.warning(
+        "cv2 (OpenCV) is unavailable; video analysis will be skipped and the "
+        "video-axis metrics will report as unmeasured."
+    )
 
 # ---------------------------------------------------------------------------
 # Landmark indices (Face Mesh / Face Landmarker v2 share the same scheme)
@@ -76,6 +91,25 @@ _HEAD_DELTA_DEG: float = 7.0  # angular jump per sample window to count as a cha
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+def _unavailable_video(path: str) -> dict[str, Any]:
+    """Safe-default video metrics when OpenCV (cv2) isn't installed.
+
+    Never crashes downstream: sub-blocks report ``no-data`` so the UI shows
+    "측정 불가" rather than a fabricated score.
+    """
+    return {
+        "status": "no-cv2",
+        "path": path,
+        "duration_s": 0.0,
+        "frames_sampled": 0,
+        "frames_with_face": 0,
+        "face_coverage": 0.0,
+        "gaze": {"status": "no-data"},
+        "expression": {"status": "no-data"},
+        "head": {"status": "no-data"},
+    }
+
+
 def analyze_video(
     video_path: Path | str,
     *,
@@ -95,6 +129,9 @@ def analyze_video(
         If ``None`` we build one in IMAGE mode from the cached model file.
         Tests pass a fake.
     """
+    if not CV2_AVAILABLE:
+        return _unavailable_video(str(video_path))
+
     path = Path(video_path)
     if not path.exists() or path.stat().st_size == 0:
         return {"status": "no-file", "path": str(path)}

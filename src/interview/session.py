@@ -40,7 +40,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-import cv2
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
@@ -55,6 +54,18 @@ from src.interview.overlay import FaceLandmarkOverlay
 from src.interview.text_render import render_korean_texts
 
 logger = logging.getLogger(__name__)
+
+# This module drives the *local* OpenCV recording window, which needs cv2.
+# Import defensively so merely importing the module never crashes (e.g. on
+# Streamlit Cloud, where the live recorder is unused); run_session() raises a
+# clear error if actually invoked without OpenCV.
+try:
+    import cv2
+
+    CV2_AVAILABLE = True
+except ImportError:
+    cv2 = None  # type: ignore[assignment]
+    CV2_AVAILABLE = False
 
 # Window + HUD constants
 _WINDOW_NAME: str = "AI Mock Interview"
@@ -400,6 +411,13 @@ def run_session(
       * ``manifest.json``         — schema described by :class:`SessionResult`
       * ``q{n}.mp4`` / ``q{n}.wav`` for each non-skipped question (1-indexed)
     """
+    if not CV2_AVAILABLE:
+        raise RuntimeError(
+            "OpenCV (cv2) is required for the local interview recorder but is "
+            "not installed. Install opencv-python locally, or use the web "
+            "(Streamlit Cloud) recording flow instead."
+        )
+
     qs = list(questions)
     if not qs:
         raise ValueError("questions must contain at least one item")

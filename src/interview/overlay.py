@@ -23,10 +23,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-import mediapipe as mp
 import numpy as np
-from mediapipe.tasks import python as mp_python
-from mediapipe.tasks.python import vision as mp_vision
 
 from config import FACE_LANDMARKER_PATH, FACE_LANDMARKER_URL
 
@@ -43,6 +40,24 @@ except ImportError:
     cv2 = None  # type: ignore[assignment]
     CV2_AVAILABLE = False
     logger.warning("cv2 (OpenCV) is unavailable; the face-landmark overlay is disabled.")
+
+# mediapipe officially supports Python 3.9–3.12 only and internally imports cv2;
+# on unsupported runtimes (e.g. Python 3.14) this import crashes. It MUST be
+# guarded — a bare ``import mediapipe`` here was crashing the whole import chain
+# (overlay → vision → orchestrator → app) before any try/except downstream could
+# catch it. With the guard, the overlay degrades to a no-op.
+try:
+    import mediapipe as mp
+    from mediapipe.tasks import python as mp_python
+    from mediapipe.tasks.python import vision as mp_vision
+
+    MEDIAPIPE_AVAILABLE = True
+except Exception:  # noqa: BLE001 - ImportError or any transitive load failure
+    mp = None  # type: ignore[assignment]
+    mp_python = None  # type: ignore[assignment]
+    mp_vision = None  # type: ignore[assignment]
+    MEDIAPIPE_AVAILABLE = False
+    logger.warning("mediapipe is unavailable; the face-landmark overlay is disabled.")
 
 # Dot color (BGR) and radius. Subtle so they don't obscure the user's face.
 _DOT_COLOR: tuple[int, int, int] = (0, 255, 0)
@@ -99,6 +114,10 @@ class FaceLandmarkOverlay:
         self._landmarker = landmarker
         self._owns = landmarker is not None  # if injected, still close it on exit
 
+        if self._landmarker is None and not MEDIAPIPE_AVAILABLE:
+            # No mediapipe → overlay is a no-op; draw() returns frames unchanged.
+            return
+
         if self._landmarker is None:
             model_path = ensure_face_landmarker_model()
             if model_path is not None:
@@ -131,6 +150,7 @@ class FaceLandmarkOverlay:
         """
         if (
             not CV2_AVAILABLE
+            or not MEDIAPIPE_AVAILABLE
             or self._landmarker is None
             or bgr_frame is None
             or bgr_frame.size == 0

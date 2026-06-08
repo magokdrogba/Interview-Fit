@@ -26,9 +26,33 @@ from typing import Any
 
 from src.analysis.audio import analyze_audio
 from src.analysis.language import analyze_language
-from src.analysis.vision import analyze_video
 
 logger = logging.getLogger(__name__)
+
+# Vision pulls in mediapipe/cv2. Import defensively so a failure anywhere in
+# that chain (e.g. mediapipe on an unsupported Python) never breaks the whole
+# analysis — the video axis just falls back to benign safe defaults.
+try:
+    from src.analysis.vision import analyze_video
+
+    VISION_AVAILABLE = True
+except Exception:  # noqa: BLE001
+    VISION_AVAILABLE = False
+    logger.warning(
+        "vision analysis is unavailable (mediapipe/cv2 import failed); "
+        "video metrics will use safe defaults."
+    )
+
+    def analyze_video(*args, **kwargs) -> dict:  # type: ignore[misc]
+        """Safe-default video metrics, schema-compatible with the real one."""
+        return {
+            "status": "no-vision",
+            "gaze": {"status": "ok", "looking_ratio": 1.0, "gaze_away_events": 0},
+            "expression": {"status": "ok", "positive_ratio": 0.0,
+                           "neutral_ratio": 1.0, "tense_ratio": 0.0},
+            "head": {"status": "ok", "yaw_std_deg": 0.0, "pitch_std_deg": 0.0,
+                     "roll_std_deg": 0.0, "direction_changes_per_min": 0.0},
+        }
 
 
 # ---------------------------------------------------------------------------

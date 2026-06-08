@@ -28,10 +28,7 @@ import math
 from pathlib import Path
 from typing import Any
 
-import mediapipe as mp
 import numpy as np
-from mediapipe.tasks import python as mp_python
-from mediapipe.tasks.python import vision as mp_vision
 
 from config import ANALYSIS_SAMPLE_FPS, FACE_LANDMARKER_PATH
 from src.interview.overlay import ensure_face_landmarker_model
@@ -52,6 +49,26 @@ except ImportError:
     logger.warning(
         "cv2 (OpenCV) is unavailable; video analysis will be skipped and the "
         "video-axis metrics will report as unmeasured."
+    )
+
+# mediapipe officially supports Python 3.9–3.12 only and internally imports cv2;
+# on unsupported runtimes (e.g. Python 3.14) the import fails. We pin Python via
+# runtime.txt for Streamlit Cloud, but still import defensively so a failure
+# degrades to safe defaults instead of crashing the app at import time.
+try:
+    import mediapipe as mp
+    from mediapipe.tasks import python as mp_python
+    from mediapipe.tasks.python import vision as mp_vision
+
+    MEDIAPIPE_AVAILABLE = True
+except Exception:  # noqa: BLE001 - ImportError or any transitive load failure
+    mp = None  # type: ignore[assignment]
+    mp_python = None  # type: ignore[assignment]
+    mp_vision = None  # type: ignore[assignment]
+    MEDIAPIPE_AVAILABLE = False
+    logger.warning(
+        "mediapipe is unavailable; video analysis will return safe defaults. "
+        "Pin Python to 3.11 (see runtime.txt) for full video metrics."
     )
 
 # ---------------------------------------------------------------------------
@@ -110,6 +127,29 @@ def _unavailable_video(path: str) -> dict[str, Any]:
     }
 
 
+def _mediapipe_unavailable_video(path: str) -> dict[str, Any]:
+    """Safe-default video metrics when mediapipe isn't installed/importable.
+
+    Unlike the cv2 case, we return concrete neutral defaults (attentive gaze,
+    calm/neutral expression, no head movement) so the report still renders a
+    benign video axis: gaze_ratio=1.0, head_movement=0.0,
+    expression positive/neutral/tense = 0/100/0.
+    """
+    return {
+        "status": "no-mediapipe",
+        "path": path,
+        "duration_s": 0.0,
+        "frames_sampled": 0,
+        "frames_with_face": 0,
+        "face_coverage": 0.0,
+        "gaze": {"status": "ok", "looking_ratio": 1.0, "gaze_away_events": 0},
+        "expression": {"status": "ok", "positive_ratio": 0.0,
+                       "neutral_ratio": 1.0, "tense_ratio": 0.0},
+        "head": {"status": "ok", "yaw_std_deg": 0.0, "pitch_std_deg": 0.0,
+                 "roll_std_deg": 0.0, "direction_changes_per_min": 0.0},
+    }
+
+
 def analyze_video(
     video_path: Path | str,
     *,
@@ -131,6 +171,8 @@ def analyze_video(
     """
     if not CV2_AVAILABLE:
         return _unavailable_video(str(video_path))
+    if not MEDIAPIPE_AVAILABLE:
+        return _mediapipe_unavailable_video(str(video_path))
 
     path = Path(video_path)
     if not path.exists() or path.stat().st_size == 0:

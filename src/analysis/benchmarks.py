@@ -38,7 +38,7 @@ AXIS_THINKING: str = "사고력 (논리·구조·내용)"
 AXES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (AXIS_ATTITUDE, "👁", ("gaze", "expression", "head_movement")),
     (AXIS_DELIVERY, "🎙", ("answer_volume", "long_pauses", "hesitation",
-                           "speech_rate", "voice_tremor")),
+                           "speech_rate")),
     (AXIS_THINKING, "💬", ("fillers", "structure")),
 )
 
@@ -146,15 +146,6 @@ def _speech_rate(v: float):
     return _R, "너무 빠름", "면접관이 내용을 소화하기 어렵습니다. 의식적으로 속도를 줄이세요."
 
 
-def _voice_tremor(v: float):
-    # v is the normalized tremor score (0-1), see audio._voice_metrics.
-    if v <= 0.40:
-        return _G, "안정적인 목소리", "목소리가 안정적입니다."
-    if v <= 0.70:
-        return _Y, "약간의 긴장", "약간의 긴장이 느껴집니다."
-    return _R, "목소리 떨림", "목소리에 떨림이 있습니다. 깊은 호흡 후 말을 시작하는 연습을 권장합니다."
-
-
 def _fillers(v: float):
     if v <= 1.0:
         return _G, "매우 적음", "군더더기 표현이 거의 없습니다."
@@ -196,10 +187,6 @@ def _fmt_spm(v: float) -> str:
     return f"분당 {round(v)}음절"
 
 
-def _fmt_index(v: float) -> str:
-    return f"{v:.2f}"
-
-
 def _fmt_fillers(v: float) -> str:
     return f"{v:.1f}개/분"
 
@@ -222,7 +209,6 @@ _REGISTRY: dict[str, tuple] = {
     "long_pauses": ("3초 이상 침묵 횟수", "권장 0회", _fmt_count, _long_pauses),
     "hesitation": ("답변 시작 전 머뭇거림", "권장 ≤ 1.0초", _fmt_seconds, _hesitation),
     "speech_rate": ("말 속도 (분당 음절 수)", "권장 250-330 SPM", _fmt_spm, _speech_rate),
-    "voice_tremor": ("목소리 떨림", "권장 ≤ 0.40", _fmt_index, _voice_tremor),
     "fillers": ("습관어 (군더더기 표현)", "권장 ≤ 1.0개/분", _fmt_fillers, _fillers),
     "structure": ("답변 구조 점수", "권장 4점 이상", _fmt_score, _structure),
 }

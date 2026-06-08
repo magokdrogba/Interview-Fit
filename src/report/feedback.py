@@ -189,7 +189,6 @@ def _render_question_block(q: dict[str, Any]) -> str:
             "hesitation_before_speech_s": (audio.get("speech") or {}).get("hesitation_before_speech_s"),
             "syllables_per_minute": (audio.get("rate") or {}).get("syllables_per_minute"),
             "rate_label": (audio.get("rate") or {}).get("rate_label"),
-            "tremor_index": (audio.get("voice") or {}).get("tremor_index"),
         }, ensure_ascii=False),
         "vision: " + json.dumps({
             "looking_ratio": (vision.get("gaze") or {}).get("looking_ratio"),

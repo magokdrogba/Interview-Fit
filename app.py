@@ -326,8 +326,9 @@ def _render_questions_panel() -> None:
 
     if not OPENAI_API_KEY:
         st.error(
-            "`OPENAI_API_KEY`가 설정되지 않았어요. `.env.example`을 `.env`로 복사하고 "
-            "키를 입력한 뒤 이 페이지를 새로고침하세요."
+            "`OPENAI_API_KEY`가 설정되지 않았어요.\n\n"
+            "- 로컬 실행: 프로젝트 폴더의 `.env` 파일에 `OPENAI_API_KEY`를 입력하세요.\n"
+            "- 웹 배포: Streamlit Cloud → Manage app → Secrets에 키를 추가하세요."
         )
         return
 
@@ -757,8 +758,9 @@ def _render_report_panel() -> None:
 
     if not OPENAI_API_KEY:
         st.error(
-            "`OPENAI_API_KEY`가 설정되지 않았어요. STT 전사와 리포트 작성에 모두 "
-            "필요해요. 먼저 `.env.example`을 `.env`로 복사하세요."
+            "`OPENAI_API_KEY`가 설정되지 않았어요. STT 전사와 리포트 작성에 모두 필요해요.\n\n"
+            "- 로컬 실행: 프로젝트 폴더의 `.env` 파일에 `OPENAI_API_KEY`를 입력하세요.\n"
+            "- 웹 배포: Streamlit Cloud → Manage app → Secrets에 키를 추가하세요."
         )
         return
 
@@ -895,7 +897,6 @@ def _aggregate_value_getter(agg: dict):
         "long_pauses": pause_avg,
         "hesitation": a.get("hesitation_mean_s"),
         "speech_rate": a.get("syllables_per_minute_mean"),
-        "voice_tremor": a.get("tremor_index_mean"),
         "fillers": l.get("fillers_per_minute_mean"),
         "structure": l.get("structure_score_mean"),
     }
@@ -911,7 +912,6 @@ def _question_value_getter(q: dict):
     expr = vision.get("expression") or {}
     head = vision.get("head") or {}
     speech = audio.get("speech") or {}
-    voice = audio.get("voice") or {}
     rate = audio.get("rate") or {}
     fillers = language.get("fillers") or {}
     structure = language.get("structure") or {}
@@ -925,7 +925,6 @@ def _question_value_getter(q: dict):
         "long_pauses": speech.get("pause_count_3s"),
         "hesitation": speech.get("hesitation_before_speech_s"),
         "speech_rate": rate.get("syllables_per_minute"),
-        "voice_tremor": voice.get("tremor_index"),
         "fillers": fillers.get("per_minute"),
         "structure": structure.get("score"),
     }

@@ -1,7 +1,8 @@
 """Central configuration: paths, thresholds, model name constants.
 
-Loaded by every module that needs a path or a tunable. Do NOT put secrets here -
-those live in `.env` and are read via `os.getenv`.
+Loaded by every module that needs a path or a tunable. Do NOT hardcode secrets
+here — the OpenAI key is read from Streamlit Cloud secrets (``st.secrets``) when
+deployed, or from a local ``.env`` file when running locally.
 """
 
 from __future__ import annotations
@@ -24,10 +25,32 @@ CACHE_DIR: Path = DATA_DIR / "cache"
 for _d in (RECORDINGS_DIR, CACHE_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
+
 # ---------------------------------------------------------------------------
 # Secrets / API
 # ---------------------------------------------------------------------------
-OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
+def get_openai_api_key() -> str | None:
+    """Return the OpenAI API key, preferring Streamlit Cloud secrets.
+
+    Resolution order:
+      1. ``st.secrets["OPENAI_API_KEY"]`` — set in Streamlit Cloud
+         (Manage app → Settings → Secrets).
+      2. ``OPENAI_API_KEY`` from the environment / local ``.env`` file.
+    """
+    # Streamlit Cloud: read from st.secrets. Wrapped broadly because accessing
+    # st.secrets outside a Streamlit runtime (CLI/tests) raises.
+    try:
+        import streamlit as st
+
+        return st.secrets["OPENAI_API_KEY"]
+    except Exception:
+        pass
+
+    # Local: read from the environment (.env was loaded above by load_dotenv).
+    return os.getenv("OPENAI_API_KEY")
+
+
+OPENAI_API_KEY: str | None = get_openai_api_key()
 
 # ---------------------------------------------------------------------------
 # Model names

@@ -1,17 +1,14 @@
-"""Post-hoc audio analysis: speech-rate context, silence/pauses, voice tremor.
+"""Post-hoc audio analysis: speech-rate context and silence/pauses.
 
 Public API
 ----------
 * :func:`analyze_audio` — takes a path to a per-question WAV (Phase 4 output)
-  and returns a dict with three sub-blocks:
+  and returns a dict with two sub-blocks:
     - ``speech``  (webrtcvad-driven): total speech vs silence, leading
       hesitation, count of long pauses, longest pause.
     - ``rate``    (optional): syllables per minute, classification, only if
       the caller passes a ``syllable_count`` (typically derived from the STT
       transcript in :mod:`src.analysis.language`).
-    - ``voice``   (librosa.pyin + RMS): mean F0, F0 coefficient of variation,
-      a cycle-to-cycle jitter proxy, energy CV, and a single 0-1
-      "tremor_index" that fuses the three.
 
 Every public dict always contains a ``status`` key. On any failure we return
 ``{"status": "error"|"no-file"|"empty"|"too-short", ...}`` rather than raising
@@ -21,7 +18,6 @@ so the orchestrator can keep going.
 from __future__ import annotations
 
 import logging
-import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,10 +51,6 @@ except Exception:  # noqa: BLE001 - ImportError or any load/ABI failure
 _VAD_SAMPLE_RATES: tuple[int, ...] = (8_000, 16_000, 32_000, 48_000)
 _VAD_FRAME_MS: int = 30  # 30 ms = 480 samples @ 16 kHz = 960 bytes int16 mono
 _MIN_DURATION_S: float = 0.25  # below this we refuse to analyze
-
-# Raw cycle-to-cycle jitter for interview-quality mics typically sits in
-# 0.0–0.05. We clamp to this and map to a 0–1 tremor display score (Issue 2).
-MAX_JITTER: float = 0.05
 
 # Korean syllable blocks (Hangul). One block == one spoken syllable, which is
 # the correct unit for speech-rate (SPM). Counting ``len(transcript)`` instead
@@ -180,13 +172,6 @@ def analyze_audio(
         else:
             out["rate"] = {"status": "no-speech"}
 
-    # --- Voice tremor / stability -------------------------------------------
-    try:
-        out["voice"] = _voice_metrics(y, sr)
-    except Exception as exc:  # noqa: BLE001
-        notes.append(f"voice metrics failed: {exc}")
-        out["voice"] = {"status": "error"}
-
     if notes:
         out["notes"] = notes
     return out
@@ -301,61 +286,3 @@ def _label_rate(spm: float) -> str:
     return "normal"
 
 
-# ---------------------------------------------------------------------------
-# F0 / jitter / energy → tremor index
-# ---------------------------------------------------------------------------
-def _voice_metrics(y: np.ndarray, sr: int) -> dict[str, Any]:
-    # librosa.pyin returns NaN where unvoiced. Use a generous F0 range that
-    # covers low male to high female voices.
-    fmin = librosa.note_to_hz("C2")  # ~65 Hz
-    fmax = librosa.note_to_hz("C6")  # ~1046 Hz
-    f0, voiced_flag, _ = librosa.pyin(
-        y, fmin=fmin, fmax=fmax, sr=sr, frame_length=2048,
-    )
-    voiced = f0[~np.isnan(f0)]
-
-    if voiced.size < 20:
-        # Too little voiced material to say anything stable.
-        return {"status": "insufficient-voiced"}
-
-    f0_mean = float(np.mean(voiced))
-    f0_std = float(np.std(voiced))
-    f0_cv = f0_std / f0_mean if f0_mean > 0 else 0.0
-
-    # Cycle-to-cycle jitter proxy: relative difference between adjacent voiced F0s.
-    periods = 1.0 / voiced
-    if periods.size > 1:
-        diffs = np.abs(np.diff(periods))
-        jitter = float(diffs.mean() / periods.mean())
-    else:
-        jitter = 0.0
-
-    # Energy stability: RMS over short frames, coefficient of variation.
-    rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
-    if rms.size > 1 and rms.mean() > 1e-6:
-        energy_cv = float(rms.std() / rms.mean())
-    else:
-        energy_cv = 0.0
-
-    # Tremor score = normalized jitter (Issue 2). Raw jitter from pyin has a
-    # wide range; clamp it to a realistic interview-mic band [0, MAX_JITTER]
-    # and map to a 0–1 display score. This is far less over-sensitive than the
-    # old blended index.
-    raw_jitter = jitter
-    normalized = float(min(raw_jitter / MAX_JITTER, 1.0)) if MAX_JITTER > 0 else 0.0
-    tremor_index = round(normalized, 3)
-
-    logger.info(
-        "voice tremor: raw_jitter=%.5f normalized=%.3f (MAX_JITTER=%.3f)",
-        raw_jitter, normalized, MAX_JITTER,
-    )
-
-    return {
-        "status": "ok",
-        "f0_mean_hz": round(f0_mean, 2),
-        "f0_cv": round(f0_cv, 4),
-        "jitter": round(raw_jitter, 5),
-        "raw_jitter": round(raw_jitter, 5),
-        "energy_cv": round(energy_cv, 4),
-        "tremor_index": tremor_index,
-    }

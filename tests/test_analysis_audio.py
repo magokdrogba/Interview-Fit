@@ -28,8 +28,7 @@ def _silence(seconds: float, sr: int = 16_000) -> np.ndarray:
 
 def test_graceful_fallback_when_webrtcvad_unavailable(tmp_path, monkeypatch):
     """On platforms without webrtcvad (e.g. Python 3.14 on Streamlit Cloud),
-    analyze_audio must not crash: it returns safe-default speech metrics and
-    still computes voice metrics."""
+    analyze_audio must not crash: it returns safe-default speech metrics."""
     monkeypatch.setattr(A, "WEBRTCVAD_AVAILABLE", False)
     p = tmp_path / "tone.wav"
     _write_wav(p, _tone(1.5, freq=180.0))
@@ -41,8 +40,6 @@ def test_graceful_fallback_when_webrtcvad_unavailable(tmp_path, monkeypatch):
     assert out["speech"]["pause_count_3s"] == 0
     assert out["speech"]["hesitation_before_speech_s"] == 0.0
     assert out["speech"]["speech_ratio"] is None
-    # Voice (tremor) analysis does not depend on webrtcvad.
-    assert out["voice"]["status"] in ("ok", "insufficient-voiced")
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +96,7 @@ def test_shape_includes_all_blocks_when_syllables_given(tmp_path):
     _write_wav(p, samples)
     out = A.analyze_audio(p, syllable_count=4)
     assert out["status"] == "ok"
-    assert {"speech", "voice"} <= set(out)
+    assert "speech" in out
     # With explicit syllable count the rate block should populate.
     if out["speech"]["total_speech_s"] >= 0.5:
         assert "rate" in out
@@ -110,22 +107,3 @@ def test_rate_labels_classify_correctly(tmp_path):
     assert A._label_rate(120.0) == "slow"
     assert A._label_rate(240.0) == "normal"
     assert A._label_rate(400.0) == "fast"
-
-
-# ---------------------------------------------------------------------------
-# F0 / jitter / energy
-# ---------------------------------------------------------------------------
-def test_voice_metrics_on_steady_tone_have_low_jitter(tmp_path):
-    # A pure sine has near-zero F0 variation: jitter and f0_cv should be small.
-    p = tmp_path / "steady.wav"
-    _write_wav(p, _tone(1.5, freq=180.0))
-    out = A.analyze_audio(p)
-    v = out["voice"]
-    if v.get("status") == "ok":
-        assert 100 < v["f0_mean_hz"] < 260, v
-        assert v["jitter"] < 0.02, v
-        # Steady tone should produce a low tremor index.
-        assert v["tremor_index"] < 0.5, v
-    else:
-        # On very rare CI environments pyin returns insufficient voiced; still acceptable.
-        assert v["status"] == "insufficient-voiced"

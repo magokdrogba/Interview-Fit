@@ -65,7 +65,6 @@ def _sample_analysis() -> dict:
                     "speech": {"speech_ratio": 0.7, "pause_count_3s": 1,
                                "hesitation_before_speech_s": 1.2},
                     "rate": {"syllables_per_minute": 230.0, "rate_label": "normal"},
-                    "voice": {"tremor_index": 0.25},
                 },
                 "vision": {
                     "status": "ok",
@@ -96,7 +95,6 @@ def _sample_analysis() -> dict:
                     "speech": {"speech_ratio": 0.6, "pause_count_3s": 3,
                                "hesitation_before_speech_s": 3.4},
                     "rate": {"syllables_per_minute": 180.0, "rate_label": "slow"},
-                    "voice": {"tremor_index": 0.5},
                 },
                 "vision": {
                     "status": "ok",
@@ -128,8 +126,7 @@ def _sample_analysis() -> dict:
             "audio": {"speech_ratio_mean": 0.65,
                       "pause_count_3s_total": 4,
                       "hesitation_mean_s": 2.3,
-                      "syllables_per_minute_mean": 205.0,
-                      "tremor_index_mean": 0.375},
+                      "syllables_per_minute_mean": 205.0},
             "language": {"fillers_total": 7,
                          "fillers_per_minute_mean": 5.0,
                          "structure_score_mean": 3.5,

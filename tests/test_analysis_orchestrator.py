@@ -20,8 +20,6 @@ def _fake_audio_ok(audio_path=None, *, syllable_count=None, **kw):
         "speech": {"status": "ok", "total_speech_s": 9.0, "total_silence_s": 3.0,
                    "speech_ratio": 0.75, "pause_count_3s": 1,
                    "longest_pause_s": 3.5, "hesitation_before_speech_s": 0.8},
-        "voice": {"status": "ok", "f0_mean_hz": 170.0, "f0_cv": 0.08,
-                  "jitter": 0.01, "energy_cv": 0.3, "tremor_index": 0.2},
     }
     if syllable_count is not None:
         base["rate"] = {"syllable_count": syllable_count,

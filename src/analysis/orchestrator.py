@@ -217,7 +217,6 @@ def _aggregate(per_question: list[dict[str, Any]]) -> dict[str, Any]:
             "pause_count_3s_total": _sum_int(collect("audio", "speech", "pause_count_3s")),
             "hesitation_mean_s": _avg(collect("audio", "speech", "hesitation_before_speech_s")),
             "syllables_per_minute_mean": _avg(collect("audio", "rate", "syllables_per_minute")),
-            "tremor_index_mean": _avg(collect("audio", "voice", "tremor_index")),
         },
         "language": {
             "fillers_total": _sum_int(collect("language", "fillers", "total")),

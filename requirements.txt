@@ -38,5 +38,9 @@ librosa==0.11.0
 # same `webrtcvad` module. The app also degrades gracefully if it's missing.
 webrtcvad-wheels
 
+# --- Community feature (Supabase backend) ---
+# Optional at runtime: if unconfigured, the community tab shows a setup guide.
+supabase==2.31.0
+
 # --- Tests ---
 pytest==9.0.3

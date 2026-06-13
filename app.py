@@ -206,6 +206,15 @@ def _render_inputs_summary() -> None:
 
 def main() -> None:
     st.set_page_config(page_title="AI 모의면접", layout="wide")
+
+    tab_interview, tab_community = st.tabs(["🏠 AI 모의면접", "💬 면접 후기"])
+    with tab_interview:
+        _render_interview_tab()
+    with tab_community:
+        _render_community_tab()
+
+
+def _render_interview_tab() -> None:
     st.title("AI 모의면접")
     st.caption(
         "이력서와 지원 회사를 입력하면 맞춤형 면접 질문을 만들고, 실시간 모의면접을 "
@@ -233,6 +242,33 @@ def main() -> None:
     _render_session_panel()
     st.divider()
     _render_report_panel()
+
+
+def _render_community_tab() -> None:
+    """면접 후기 커뮤니티 — write-gated feed backed by Supabase."""
+    from src.community.db import get_client
+    from src.community.feed import render_feed
+    from src.community.gate import has_posted, mark_posted
+    from src.community.write import render_write_form
+
+    st.title("💬 면접 후기 커뮤니티")
+
+    client = get_client()
+    if client is None:
+        st.warning("커뮤니티 기능을 사용하려면 Supabase 설정이 필요합니다.")
+        st.info("`DEPLOY.md`의 'Supabase 설정' 섹션을 참고하세요.")
+        return
+
+    if not has_posted():
+        st.info(
+            "💬 다른 분들의 후기를 보려면 먼저 본인의 면접 경험을 공유해주세요.\n\n"
+            "작성 완료 후 전체 후기를 열람할 수 있습니다."
+        )
+        render_write_form(client, on_success=mark_posted)
+    else:
+        render_feed(client)
+        with st.expander("✏️ 후기 추가 작성"):
+            render_write_form(client, on_success=lambda: None)
 
 
 # ---------------------------------------------------------------------------

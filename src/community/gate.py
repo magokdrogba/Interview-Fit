@@ -12,15 +12,22 @@ from typing import Any
 
 
 def has_posted(client: Any, user_id: str) -> bool:
-    """Return True if ``user_id`` has at least one post. False on any error."""
+    """Return True if ``user_id`` has at least one post. False on any error.
+
+    Defensive: only a non-empty string id is a valid query argument, so a User
+    object or None (a caller bug) safely yields False instead of a TypeError.
+    """
+    if not user_id or not isinstance(user_id, str):
+        return False
     try:
         res = (
             client.table("interview_posts")
             .select("id")
-            .eq("user_id", user_id)
+            .eq("user_id", str(user_id))
             .limit(1)
             .execute()
         )
         return len(res.data or []) > 0
-    except Exception:  # noqa: BLE001 - never crash on a DB hiccup
+    except Exception as e:  # noqa: BLE001 - never crash on a DB hiccup
+        print(f"[DEBUG] has_posted error: {e}")
         return False

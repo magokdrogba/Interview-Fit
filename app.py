@@ -247,7 +247,6 @@ def _render_interview_tab() -> None:
 def _render_community_tab() -> None:
     """면접 후기 커뮤니티 — Supabase Auth 로그인 + 게시물 기반 write-gate."""
     from src.community.auth_ui import (
-        current_user_id,
         render_auth_page,
         render_logout_button,
         restore_session,
@@ -273,8 +272,19 @@ def _render_community_tab() -> None:
         render_auth_page(client)
         return
 
-    user_id = current_user_id(user)
-    if user_id is None:
+    # Extract the actual UUID string from the stored Supabase session/response.
+    # The shape differs between sign_in responses and restored sessions, so we
+    # try the common nestings before falling back.
+    try:
+        user_id = user.user.id
+    except AttributeError:
+        try:
+            user_id = user.id
+        except AttributeError:
+            user_id = str(user)
+    print(f"[DEBUG] user type: {type(user)}, user_id: {user_id}")
+
+    if not user_id:
         # Corrupt/expired session object — force re-login.
         st.session_state.pop("user", None)
         render_auth_page(client)

@@ -108,6 +108,17 @@ def test_has_posted_handles_none_data():
     assert has_posted(_FakeClient(_FakeQuery(result=None)), "u") is False
 
 
+def test_has_posted_rejects_non_string_user_id():
+    # A User object / None must not reach the DB query (would TypeError).
+    class _Boom:
+        def table(self, _n):
+            raise AssertionError("DB should not be queried for a non-string id")
+
+    assert has_posted(_Boom(), None) is False          # type: ignore[arg-type]
+    assert has_posted(_Boom(), object()) is False      # type: ignore[arg-type]
+    assert has_posted(_Boom(), "") is False
+
+
 # ---------------------------------------------------------------------------
 # feed._relative_time — Korean relative timestamps
 # ---------------------------------------------------------------------------

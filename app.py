@@ -207,10 +207,24 @@ def _render_inputs_summary() -> None:
 def main() -> None:
     st.set_page_config(page_title="AI 모의면접", layout="wide")
 
-    tab_interview, tab_community = st.tabs(["🏠 AI 모의면접", "💬 면접 후기"])
-    with tab_interview:
+    # NOTE: st.tabs renders every tab's body on each run and the sidebar is a
+    # single global region, so a tab can't conditionally hide the sidebar
+    # (tab switching is purely client-side). We use a server-side nav selector
+    # instead — only the selected page's body executes, so the sidebar (which
+    # only the interview page renders) appears only on that page.
+    nav = st.radio(
+        "페이지 선택",
+        ["🏠 AI 모의면접", "💬 면접 후기"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="_nav",
+    )
+    active_tab = "interview" if nav.startswith("🏠") else "community"
+    st.session_state["active_tab"] = active_tab
+
+    if active_tab == "interview":
         _render_interview_tab()
-    with tab_community:
+    else:
         _render_community_tab()
 
 

@@ -11,7 +11,7 @@ from typing import Any
 
 import streamlit as st
 
-from src.community.feed import _relative_time
+from src.community.feed import _html_text, _relative_time
 
 
 def load_comments(client: Any, post_id: int) -> list[dict]:
@@ -53,9 +53,16 @@ def render_comments(client: Any, post_id: int, current_user: Any) -> None:
     st.markdown(f"💬 **댓글 {len(comments)}개**")
 
     for c in comments:
-        st.markdown(f"**@{c.get('nickname', '익명')}**  ·  {_relative_time(c.get('created_at'))}")
-        st.write(c.get("content", ""))
-        st.markdown("")  # small spacer
+        nickname = _html_text(c.get("nickname", "익명"))
+        when = _html_text(_relative_time(c.get("created_at")))
+        content = _html_text(c.get("content", ""))
+        st.markdown(
+            f'<div style="background:#1a2535; padding:10px 14px; '
+            f'border-radius:6px; margin-bottom:6px;">'
+            f'<b>@{nickname}</b> · {when}<br>'
+            f'<span style="color:#e2e8f0;">{content}</span></div>',
+            unsafe_allow_html=True,
+        )
 
     user_id = _extract_user_id(current_user) if current_user is not None else None
     if user_id is None:

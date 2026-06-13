@@ -8,11 +8,17 @@ message instead of crashing the app.
 
 from __future__ import annotations
 
+import html
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
 import streamlit as st
+
+
+def _html_text(text: str | None) -> str:
+    """Escape user text for safe HTML embedding and keep line breaks."""
+    return html.escape(text or "").replace("\n", "<br>")
 
 _PAGE_SIZE = 15
 _CANDIDATE_CAP = 300  # max rows pulled before client-side sort/paginate
@@ -218,6 +224,7 @@ def _render_detail(client: Any, post_id: int, current_user: Any) -> None:
         f"@{post.get('nickname', '익명')}  ·  {_relative_time(post.get('created_at'))}  ·  "
         f"조회 {views}"
     )
+    st.divider()
 
     # Meta line
     emoji = _RESULT_EMOJI.get(post.get("result", ""), "•")
@@ -226,23 +233,36 @@ def _render_detail(client: Any, post_id: int, current_user: Any) -> None:
         f"면접단계: {post.get('round', '')}  |  결과: {emoji} {post.get('result', '')}  |  "
         f"분위기: {post.get('atmosphere', '')}"
     )
-    st.divider()
 
-    # Questions
+    # Questions — each in a tinted box for readability.
     q_lines = [q.strip() for q in (post.get("questions") or "").splitlines() if q.strip()]
     if q_lines:
         st.markdown("#### 📋 받은 질문")
         for i, q in enumerate(q_lines, start=1):
-            st.markdown(f"**Q{i}.** {q}")
+            st.markdown(
+                f'<div style="background:#1e2d3d; padding:12px 16px; '
+                f'border-radius:8px; margin-bottom:8px;">Q{i}. {_html_text(q)}</div>',
+                unsafe_allow_html=True,
+            )
 
-    # Review
+    # Review — readable block with comfortable line height.
     st.markdown("#### 📝 면접 후기")
-    st.write(post.get("review", ""))
+    st.markdown(
+        f'<div style="background:#1a2535; padding:16px 20px; border-radius:8px; '
+        f'line-height:1.8; font-size:15px; color:#e2e8f0;">'
+        f'{_html_text(post.get("review", ""))}</div>',
+        unsafe_allow_html=True,
+    )
 
-    # Tips
+    # Tips — accent left border.
     if post.get("tips"):
         st.markdown("#### 💡 준비 팁")
-        st.write(post["tips"])
+        st.markdown(
+            f'<div style="border-left:4px solid #f59e0b; padding:12px 16px; '
+            f'background:#1e2d3d; border-radius:0 8px 8px 0;">'
+            f'{_html_text(post["tips"])}</div>',
+            unsafe_allow_html=True,
+        )
 
     # Like
     liked: set = st.session_state.setdefault("liked_posts", set())

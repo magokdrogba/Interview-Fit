@@ -9,9 +9,27 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from src.community import db
-from src.community.feed import _comment_counts, _post_title, _relative_time
+from src.community.feed import _comment_counts, _html_text, _post_title, _relative_time
 from src.community.gate import has_posted
 from src.community.write import _author_hash
+
+
+# ---------------------------------------------------------------------------
+# feed._html_text — escape user content before HTML embedding (XSS guard)
+# ---------------------------------------------------------------------------
+def test_html_text_escapes_markup():
+    out = _html_text("<script>alert(1)</script> & \"x\"")
+    assert "<script>" not in out
+    assert "&lt;script&gt;" in out
+    assert "&amp;" in out and "&quot;" in out
+
+
+def test_html_text_preserves_newlines_as_br():
+    assert _html_text("line1\nline2") == "line1<br>line2"
+
+
+def test_html_text_none_is_blank():
+    assert _html_text(None) == ""
 
 
 # ---------------------------------------------------------------------------

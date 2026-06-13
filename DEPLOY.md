@@ -127,3 +127,38 @@ CREATE POLICY "auth update likes" ON interview_posts
 2. 로그인 후 + 첫 게시물 없음 → 글쓰기 폼만 표시 (열람 불가)
 3. 게시물 등록 완료 → 피드로 이동 (재로그인해도 유지, DB로 판별)
 - 닉네임은 회원가입 시 입력하며 계정(user_metadata)에 저장됩니다.
+
+## 커뮤니티 피드 재설계 마이그레이션 (댓글 · 제목 · 조회수)
+네이버 카페 후기 게시판 스타일의 목록/상세 분리 + 댓글 기능을 위한 마이그레이션입니다.
+Supabase SQL Editor에서 실행하세요.
+
+```sql
+-- 1) 게시글 제목 / 조회수 컬럼
+ALTER TABLE interview_posts ADD COLUMN IF NOT EXISTS title TEXT;
+UPDATE interview_posts
+  SET title = company || ' ' || role || ' ' || round || ' 면접 후기'
+  WHERE title IS NULL;
+ALTER TABLE interview_posts ADD COLUMN IF NOT EXISTS views INT DEFAULT 0;
+
+-- 2) 댓글 테이블
+CREATE TABLE IF NOT EXISTS interview_comments (
+  id         BIGSERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  post_id    BIGINT NOT NULL REFERENCES interview_posts(id) ON DELETE CASCADE,
+  user_id    UUID REFERENCES auth.users(id),
+  nickname   TEXT NOT NULL,
+  content    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_comments_post ON interview_comments(post_id);
+
+ALTER TABLE interview_comments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth read comments" ON interview_comments
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "auth insert comments" ON interview_comments
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+```
+
+### 화면 구성
+- **목록**: 제목(클릭 가능) 행 + 결과·분위기·작성자·시간·💬댓글수·👍좋아요. 검색/결과필터/정렬(최신순·좋아요순·댓글많은순), 15개씩 "더 보기".
+- **상세**: ← 목록으로, 제목·작성자·조회수, 메타 한 줄, 받은 질문/후기/준비 팁, 좋아요, 댓글(목록 + 작성).

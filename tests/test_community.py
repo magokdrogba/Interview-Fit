@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from src.community import db
-from src.community.feed import _relative_time
+from src.community.feed import _comment_counts, _post_title, _relative_time
 from src.community.gate import has_posted
 from src.community.write import _author_hash
 
@@ -151,3 +151,59 @@ def test_relative_time_handles_zulu_suffix():
 def test_relative_time_empty_is_blank():
     assert _relative_time(None) == ""
     assert _relative_time("") == ""
+
+
+# ---------------------------------------------------------------------------
+# feed._post_title — uses title column, falls back for legacy rows
+# ---------------------------------------------------------------------------
+def test_post_title_prefers_title_column():
+    assert _post_title({"title": "BCG RA 인턴 면접 후기"}) == "BCG RA 인턴 면접 후기"
+
+
+def test_post_title_falls_back_to_composed():
+    post = {"company": "BCG", "role": "RA", "round": "인턴"}
+    assert _post_title(post) == "BCG RA 인턴 면접 후기"
+
+
+def test_post_title_ignores_blank_title():
+    post = {"title": "  ", "company": "Toss", "role": "BE", "round": "1차"}
+    assert _post_title(post) == "Toss BE 1차 면접 후기"
+
+
+# ---------------------------------------------------------------------------
+# feed._comment_counts — group counts per post id
+# ---------------------------------------------------------------------------
+class _CommentsClient:
+    def __init__(self, rows, error: Exception | None = None):
+        self._rows, self._error = rows, error
+        self.in_ids = None
+
+    # fluent chain: table().select().in_().execute()
+    def table(self, _n):
+        return self
+
+    def select(self, *_a, **_k):
+        return self
+
+    def in_(self, _col, ids):
+        self.in_ids = ids
+        return self
+
+    def execute(self):
+        if self._error:
+            raise self._error
+        return type("R", (), {"data": self._rows})()
+
+
+def test_comment_counts_groups_by_post():
+    rows = [{"post_id": 1}, {"post_id": 1}, {"post_id": 2}]
+    counts = _comment_counts(_CommentsClient(rows), [1, 2, 3])
+    assert counts == {1: 2, 2: 1}
+
+
+def test_comment_counts_empty_ids_skips_query():
+    assert _comment_counts(_CommentsClient([]), []) == {}
+
+
+def test_comment_counts_returns_empty_on_error():
+    assert _comment_counts(_CommentsClient(None, error=RuntimeError("x")), [1]) == {}

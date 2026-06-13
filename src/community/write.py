@@ -99,7 +99,10 @@ def render_write_form(client: Any) -> None:
         return
 
     # --- Insert ------------------------------------------------------------
+    # Auto title, e.g. "BCG RA 인턴 면접 후기".
+    title = f"{company.strip()} {role.strip()} {round_} 면접 후기"
     payload = {
+        "title": title,
         "company": company.strip(),
         "role": role.strip(),
         "round": round_,

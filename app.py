@@ -300,6 +300,10 @@ def _render_community_tab() -> None:
     if "has_posted_cache" not in st.session_state:
         st.session_state["has_posted_cache"] = has_posted(client, user_id)
 
+    # Track which post (if any) is open in the detail view.
+    if "selected_post_id" not in st.session_state:
+        st.session_state["selected_post_id"] = None
+
     if not st.session_state["has_posted_cache"]:
         st.info(
             "다른 분들의 후기를 보려면 먼저 본인의 경험을 공유해주세요.\n\n"
@@ -307,9 +311,11 @@ def _render_community_tab() -> None:
         )
         render_write_form(client)
     else:
-        render_feed(client)
-        with st.expander("✏️ 후기 추가 작성"):
-            render_write_form(client)
+        render_feed(client, current_user=user)
+        # Show the "add review" form only in the list view (not while reading a post).
+        if st.session_state.get("selected_post_id") is None:
+            with st.expander("✏️ 후기 추가 작성"):
+                render_write_form(client)
 
 
 # ---------------------------------------------------------------------------

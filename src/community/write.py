@@ -1,14 +1,18 @@
 """Community write form: share one interview experience.
 
-``render_write_form(client, on_success)`` renders the form, validates input,
-inserts a row into the ``interview_posts`` table, and calls ``on_success`` then
-reruns. All Supabase errors are surfaced to the user without crashing.
+``render_write_form(client)`` renders the form, validates input, inserts a row
+(including the authenticated ``user_id`` and account nickname) into the
+``interview_posts`` table, then unlocks the feed and reruns. All Supabase
+errors are surfaced to the user without crashing.
+
+Requires a logged-in user: ``st.session_state["user"]`` (set by auth_ui) and
+``st.session_state["nickname"]`` (the account's display nickname).
 """
 
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Callable
+from typing import Any
 
 import streamlit as st
 
@@ -29,19 +33,23 @@ def _author_hash(nickname: str) -> str:
     return digest[:12]
 
 
-def render_write_form(client: Any, on_success: Callable[[], None]) -> None:
-    """Render the interview-experience write form.
+def render_write_form(client: Any) -> None:
+    """Render the interview-experience write form for the logged-in user.
 
-    Parameters
-    ----------
-    client:
-        A configured Supabase client (caller guarantees it's not None).
-    on_success:
-        Called after a successful insert (e.g. to unlock the feed).
+    On success, sets ``st.session_state["has_posted_cache"] = True`` to unlock
+    the feed, then reruns. ``client`` is a configured Supabase client and the
+    caller guarantees the user is logged in.
     """
+    user = st.session_state.get("user")
+    user_id = getattr(getattr(user, "user", None), "id", None)
+    if user_id is None:
+        st.error("로그인이 필요합니다. 다시 로그인해주세요.")
+        return
+
+    nickname = st.session_state.get("nickname", "익명")
+    st.caption(f"작성자: @{nickname}")
+
     with st.form("community_write", clear_on_submit=False):
-        nickname = st.text_input("닉네임 *", max_chars=_MAX_NICKNAME_CHARS,
-                                 placeholder="표시용 닉네임 (최대 20자)")
         col1, col2 = st.columns(2)
         with col1:
             company = st.text_input("지원 회사 *", placeholder="예: BCG, McKinsey")
@@ -74,8 +82,6 @@ def render_write_form(client: Any, on_success: Callable[[], None]) -> None:
 
     # --- Validation --------------------------------------------------------
     errors: list[str] = []
-    if not nickname.strip():
-        errors.append("닉네임을 입력해주세요.")
     if not company.strip():
         errors.append("지원 회사를 입력해주세요.")
     if not role.strip():
@@ -102,8 +108,9 @@ def render_write_form(client: Any, on_success: Callable[[], None]) -> None:
         "questions": "\n".join(question_lines),
         "review": review.strip(),
         "tips": tips.strip() or None,
-        "author_hash": _author_hash(nickname.strip()),
-        "nickname": nickname.strip(),
+        "user_id": user_id,
+        "author_hash": _author_hash(nickname),
+        "nickname": nickname,
     }
 
     try:
@@ -113,5 +120,5 @@ def render_write_form(client: Any, on_success: Callable[[], None]) -> None:
         return
 
     st.success("후기가 등록됐어요! 이제 다른 분들의 후기를 볼 수 있습니다 🎉")
-    on_success()
+    st.session_state["has_posted_cache"] = True
     st.rerun()

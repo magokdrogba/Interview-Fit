@@ -245,10 +245,16 @@ def _render_interview_tab() -> None:
 
 
 def _render_community_tab() -> None:
-    """면접 후기 커뮤니티 — write-gated feed backed by Supabase."""
+    """면접 후기 커뮤니티 — Supabase Auth 로그인 + 게시물 기반 write-gate."""
+    from src.community.auth_ui import (
+        current_user_id,
+        render_auth_page,
+        render_logout_button,
+        restore_session,
+    )
     from src.community.db import get_client
     from src.community.feed import render_feed
-    from src.community.gate import has_posted, mark_posted
+    from src.community.gate import has_posted
     from src.community.write import render_write_form
 
     st.title("💬 면접 후기 커뮤니티")
@@ -259,16 +265,41 @@ def _render_community_tab() -> None:
         st.info("`DEPLOY.md`의 'Supabase 설정' 섹션을 참고하세요.")
         return
 
-    if not has_posted():
+    # Rehydrate an existing login (survives reruns / re-login).
+    restore_session(client)
+    user = st.session_state.get("user")
+
+    if not user:
+        render_auth_page(client)
+        return
+
+    user_id = current_user_id(user)
+    if user_id is None:
+        # Corrupt/expired session object — force re-login.
+        st.session_state.pop("user", None)
+        render_auth_page(client)
+        return
+
+    # Logout button, top-right.
+    _, col_logout = st.columns([5, 1])
+    with col_logout:
+        render_logout_button(client)
+    st.caption(f"@{st.session_state.get('nickname', '익명')} 님으로 로그인됨")
+
+    # Cache the has-posted check to avoid a DB hit on every rerun.
+    if "has_posted_cache" not in st.session_state:
+        st.session_state["has_posted_cache"] = has_posted(client, user_id)
+
+    if not st.session_state["has_posted_cache"]:
         st.info(
-            "💬 다른 분들의 후기를 보려면 먼저 본인의 면접 경험을 공유해주세요.\n\n"
+            "다른 분들의 후기를 보려면 먼저 본인의 경험을 공유해주세요.\n\n"
             "작성 완료 후 전체 후기를 열람할 수 있습니다."
         )
-        render_write_form(client, on_success=mark_posted)
+        render_write_form(client)
     else:
         render_feed(client)
         with st.expander("✏️ 후기 추가 작성"):
-            render_write_form(client, on_success=lambda: None)
+            render_write_form(client)
 
 
 # ---------------------------------------------------------------------------

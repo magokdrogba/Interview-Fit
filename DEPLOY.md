@@ -89,3 +89,41 @@ CREATE POLICY "public update likes" ON interview_posts
   (잡플래닛·블라인드 방식). 세션 단위로 적용됩니다.
 - 닉네임은 표시용이며, 익명 식별자(`author_hash`)는 `sha256(nickname+salt)`의
   앞 12자입니다.
+
+## Supabase Auth 마이그레이션 (이메일 로그인 기반 커뮤니티)
+커뮤니티가 세션 기반 write-gate에서 **계정 기반 로그인**으로 바뀌었습니다.
+기존 프로젝트라면 SQL Editor에서 아래 마이그레이션을 실행하세요.
+
+```sql
+-- 기존 테이블에 user_id 컬럼 추가
+ALTER TABLE interview_posts
+  ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id);
+
+-- RLS 정책 재설정 (인증된 사용자만 작성 가능)
+DROP POLICY IF EXISTS "public insert" ON interview_posts;
+CREATE POLICY "auth insert" ON interview_posts
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- 읽기는 인증된 사용자만
+DROP POLICY IF EXISTS "public read" ON interview_posts;
+CREATE POLICY "auth read" ON interview_posts
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+-- 좋아요는 인증된 사용자만
+DROP POLICY IF EXISTS "public update likes" ON interview_posts;
+CREATE POLICY "auth update likes" ON interview_posts
+  FOR UPDATE USING (auth.role() = 'authenticated');
+```
+
+### 이메일 인증 설정
+- Supabase 대시보드 → **Authentication → URL Configuration**
+  - **Site URL**: `https://본인앱주소.streamlit.app`
+  - **Redirect URLs**에 동일 주소 추가
+- **로컬 테스트** 시에는 이메일 인증을 끄는 것을 권장:
+  - Authentication → Providers → Email → **"Confirm email" 토글 OFF**
+
+### 로그인 흐름
+1. 비로그인 → 로그인 / 회원가입 화면만 표시
+2. 로그인 후 + 첫 게시물 없음 → 글쓰기 폼만 표시 (열람 불가)
+3. 게시물 등록 완료 → 피드로 이동 (재로그인해도 유지, DB로 판별)
+- 닉네임은 회원가입 시 입력하며 계정(user_metadata)에 저장됩니다.

@@ -10,7 +10,48 @@ from datetime import datetime, timedelta, timezone
 
 from src.community import db
 from src.community.feed import _relative_time
+from src.community.gate import has_posted
 from src.community.write import _author_hash
+
+
+# ---------------------------------------------------------------------------
+# Fake Supabase query builder for gate.has_posted
+# ---------------------------------------------------------------------------
+class _FakeResp:
+    def __init__(self, data):
+        self.data = data
+
+
+class _FakeQuery:
+    """Records the fluent chain and returns a scripted result (or raises)."""
+
+    def __init__(self, result=None, error: Exception | None = None):
+        self._result = result
+        self._error = error
+        self.eq_args: tuple | None = None
+
+    def select(self, *_a, **_k):
+        return self
+
+    def eq(self, *args):
+        self.eq_args = args
+        return self
+
+    def limit(self, *_a, **_k):
+        return self
+
+    def execute(self):
+        if self._error is not None:
+            raise self._error
+        return _FakeResp(self._result)
+
+
+class _FakeClient:
+    def __init__(self, query: _FakeQuery):
+        self._query = query
+
+    def table(self, _name):
+        return self._query
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +84,28 @@ def test_author_hash_does_not_leak_nickname():
     # The raw nickname must not appear in the hash.
     nick = "secretname"
     assert nick not in _author_hash(nick)
+
+
+# ---------------------------------------------------------------------------
+# gate.has_posted — DB-backed membership check
+# ---------------------------------------------------------------------------
+def test_has_posted_true_when_rows_exist():
+    q = _FakeQuery(result=[{"id": 1}])
+    assert has_posted(_FakeClient(q), "user-123") is True
+    assert q.eq_args == ("user_id", "user-123")  # filters on the right column
+
+
+def test_has_posted_false_when_no_rows():
+    assert has_posted(_FakeClient(_FakeQuery(result=[])), "user-123") is False
+
+
+def test_has_posted_false_on_db_error():
+    q = _FakeQuery(error=RuntimeError("network down"))
+    assert has_posted(_FakeClient(q), "user-123") is False
+
+
+def test_has_posted_handles_none_data():
+    assert has_posted(_FakeClient(_FakeQuery(result=None)), "u") is False
 
 
 # ---------------------------------------------------------------------------
